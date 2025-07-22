@@ -164,7 +164,6 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
     event UtilityUsageRecorded(uint256 indexed agreementId, uint256 usage, uint256 cost);
     event AutoPaymentSetup(uint256 indexed agreementId, address indexed tenant, bool enabled);
 
-    // Existing events
     event AgreementCreated(uint256 indexed agreementId, address indexed landlord, address indexed tenant, uint256 monthlyRent, uint256 securityDeposit, string propertyAddress);
     event RentPaid(uint256 indexed agreementId, address indexed tenant, uint256 amount, uint256 lateFee, uint256 timestamp);
     event AgreementTerminated(uint256 indexed agreementId, address indexed initiator, uint256 timestamp);
