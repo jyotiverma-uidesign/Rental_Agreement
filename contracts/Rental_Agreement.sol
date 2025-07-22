@@ -55,7 +55,6 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
         bool isLandlordReview; // true if landlord reviewing tenant
     }
 
-    // New structures
     struct Inspection {
         uint256 agreementId;
         address inspector;
@@ -103,7 +102,7 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
         address walletAddress;
     }
 
-    // Existing mappings
+
     mapping(uint256 => Agreement) public agreements;
     mapping(address => uint256[]) public landlordAgreements;
     mapping(address => uint256[]) public tenantAgreements;
@@ -137,7 +136,7 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
     uint256 public globalPaymentPlanCounter;
     uint256 public globalRentIncreaseCounter;
     
-    // Constants
+
     uint256 public constant LATE_FEE_PERCENTAGE = 5; // 5% late fee
     uint256 public constant SECONDS_IN_MONTH = 30 days;
     uint256 public constant MAINTENANCE_RESERVE_PERCENTAGE = 2; // 2% of monthly rent
