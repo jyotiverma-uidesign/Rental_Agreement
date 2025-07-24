@@ -114,7 +114,6 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
     mapping(address => bool) public verifiedUsers;
     mapping(address => uint256) public userSecurityScores;
 
-    // New mappings
     mapping(uint256 => Inspection[]) public agreementInspections;
     mapping(uint256 => PaymentPlan[]) public agreementPaymentPlans;
     mapping(uint256 => RentIncrease[]) public agreementRentIncreases;
@@ -148,7 +147,7 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
     
     uint256 public totalPlatformFees;
 
-    // New events
+
     event InspectionScheduled(uint256 indexed agreementId, uint256 indexed inspectionId, string inspectionType, uint256 scheduledDate);
     event InspectionCompleted(uint256 indexed agreementId, uint256 indexed inspectionId, string[] issues);
     event PaymentPlanCreated(uint256 indexed agreementId, uint256 indexed planId, uint256 totalAmount, uint256 installments);
@@ -175,7 +174,7 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
     event AgreementRenewed(uint256 indexed agreementId, uint256 newEndDate, uint256 newRent);
     event UserVerified(address indexed user, uint256 securityScore);
 
-    // Existing modifiers
+   
     modifier onlyLandlord(uint256 _agreementId) {
         require(agreements[_agreementId].landlord == msg.sender, "Only landlord can perform this action");
         _;
@@ -207,9 +206,7 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
 
     constructor() Ownable(msg.sender) {}
 
-    /**
-     * @dev Enhanced agreement creation with more options
-     */
+
     function createAgreementEnhanced(
         address _tenant,
         uint256 _monthlyRent,
