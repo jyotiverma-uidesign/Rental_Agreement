@@ -264,9 +264,7 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
         emit AgreementCreated(agreementId, msg.sender, _tenant, _monthlyRent, _securityDeposit, _propertyAddress);
     }
 
-    /**
-     * @dev Schedule property inspection
-     */
+/
     function scheduleInspection(
         uint256 _agreementId,
         string memory _inspectionType,
@@ -298,9 +296,7 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
         emit InspectionCompleted(_agreementId, inspectionId, _issuesFound);
     }
 
-    /**
-     * @dev Acknowledge inspection (tenant)
-     */
+ 
     function acknowledgeInspection(uint256 _agreementId, uint256 _inspectionIndex) external nonReentrant whenNotPaused agreementExists(_agreementId) onlyTenant(_agreementId) {
         require(_inspectionIndex < agreementInspections[_agreementId].length, "Invalid inspection index");
         agreementInspections[_ag
