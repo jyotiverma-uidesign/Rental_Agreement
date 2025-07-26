@@ -22,7 +22,6 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
         bool autoRenewal;
         uint256 renewalDuration;
         uint256 totalRentPaid;
-        // New fields
         uint256 utilitiesDeposit;
         bool utilitiesIncluded;
         uint256 petDeposit;
@@ -42,24 +41,24 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
         uint256 actualCost;
         uint256 timestamp;
         bool isUrgent;
-        string[] imageHashes; // IPFS hashes for maintenance images
+        string[] imageHashes;
         address assignedContractor;
     }
 
     struct Review {
         address reviewer;
         address reviewee;
-        uint256 rating; // 1-5 stars
+        uint256 rating;
         string comment;
         uint256 timestamp;
-        bool isLandlordReview; // true if landlord reviewing tenant
+        bool isLandlordReview;
     }
 
     struct Inspection {
         uint256 agreementId;
         address inspector;
-        string inspectionType; // "move-in", "periodic", "move-out"
-        string reportHash; // IPFS hash for inspection report
+        string inspectionType;
+        string reportHash;
         uint256 timestamp;
         bool tenantAcknowledged;
         string[] issuesFound;
@@ -74,7 +73,7 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
         uint256 installmentAmount;
         uint256 nextPaymentDue;
         bool isActive;
-        string reason; // "late_rent", "damages", "utilities"
+        string reason;
     }
 
     struct RentIncrease {
@@ -88,11 +87,11 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
     }
 
     struct Document {
-        string documentHash; // IPFS hash
-        string documentType; // "lease", "insurance", "inspection", "receipt"
+        string documentHash;
+        string documentType;
         uint256 timestamp;
         address uploader;
-        bool isPublic; // viewable by both parties
+        bool isPublic;
     }
 
     struct EmergencyContact {
@@ -102,13 +101,12 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
         address walletAddress;
     }
 
-
     mapping(uint256 => Agreement) public agreements;
     mapping(address => uint256[]) public landlordAgreements;
     mapping(address => uint256[]) public tenantAgreements;
     mapping(uint256 => MaintenanceRequest) public maintenanceRequests;
     mapping(address => Review[]) public userReviews;
-    mapping(address => uint256) public userRatings; // Average rating * 100
+    mapping(address => uint256) public userRatings;
     mapping(address => uint256) public userReviewCount;
     mapping(uint256 => uint256[]) public agreementMaintenanceRequests;
     mapping(address => bool) public verifiedUsers;
@@ -126,27 +124,25 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
     mapping(uint256 => uint256) public rentIncreaseCounter;
     mapping(uint256 => bool) public agreementInsured;
     mapping(address => uint256) public userEscrowBalance;
-    mapping(uint256 => uint256) public agreementUtilityUsage; // in units
-    mapping(address => string) public userKYCHash; // IPFS hash for KYC documents
-    
+    mapping(uint256 => uint256) public agreementUtilityUsage;
+    mapping(address => string) public userKYCHash;
+
     uint256 public agreementCounter;
     uint256 public maintenanceRequestCounter;
     uint256 public globalInspectionCounter;
     uint256 public globalPaymentPlanCounter;
     uint256 public globalRentIncreaseCounter;
-    
 
-    uint256 public constant LATE_FEE_PERCENTAGE = 5; // 5% late fee
+    uint256 public constant LATE_FEE_PERCENTAGE = 5;
     uint256 public constant SECONDS_IN_MONTH = 30 days;
-    uint256 public constant MAINTENANCE_RESERVE_PERCENTAGE = 2; // 2% of monthly rent
-    uint256 public constant PLATFORM_FEE_PERCENTAGE = 1; // 1% platform fee
-    uint256 public constant MAX_LATE_FEE_MULTIPLIER = 3; // Max 3x late fees
-    uint256 public constant RENT_INCREASE_NOTICE_DAYS = 30; // 30 days notice for rent increase
-    uint256 public constant MAX_RENT_INCREASE_PERCENTAGE = 20; // Max 20% rent increase per year
-    uint256 public constant INSPECTION_REMINDER_DAYS = 7; // 7 days before inspection
-    
-    uint256 public totalPlatformFees;
+    uint256 public constant MAINTENANCE_RESERVE_PERCENTAGE = 2;
+    uint256 public constant PLATFORM_FEE_PERCENTAGE = 1;
+    uint256 public constant MAX_LATE_FEE_MULTIPLIER = 3;
+    uint256 public constant RENT_INCREASE_NOTICE_DAYS = 30;
+    uint256 public constant MAX_RENT_INCREASE_PERCENTAGE = 20;
+    uint256 public constant INSPECTION_REMINDER_DAYS = 7;
 
+    uint256 public totalPlatformFees;
 
     event InspectionScheduled(uint256 indexed agreementId, uint256 indexed inspectionId, string inspectionType, uint256 scheduledDate);
     event InspectionCompleted(uint256 indexed agreementId, uint256 indexed inspectionId, string[] issues);
@@ -174,7 +170,6 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
     event AgreementRenewed(uint256 indexed agreementId, uint256 newEndDate, uint256 newRent);
     event UserVerified(address indexed user, uint256 securityScore);
 
-   
     modifier onlyLandlord(uint256 _agreementId) {
         require(agreements[_agreementId].landlord == msg.sender, "Only landlord can perform this action");
         _;
@@ -206,7 +201,6 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
 
     constructor() Ownable(msg.sender) {}
 
-
     function createAgreementEnhanced(
         address _tenant,
         uint256 _monthlyRent,
@@ -233,7 +227,7 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
 
         uint256 agreementId = agreementCounter++;
         uint256 maintenanceReserve = (_monthlyRent * MAINTENANCE_RESERVE_PERCENTAGE) / 100;
-        
+
         Agreement storage agreement = agreements[agreementId];
         agreement.landlord = msg.sender;
         agreement.tenant = _tenant;
@@ -264,7 +258,6 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
         emit AgreementCreated(agreementId, msg.sender, _tenant, _monthlyRent, _securityDeposit, _propertyAddress);
     }
 
-/
     function scheduleInspection(
         uint256 _agreementId,
         string memory _inspectionType,
@@ -277,7 +270,7 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
         require(_issuesFound.length == _estimatedRepairCosts.length, "Issues and costs arrays must match");
 
         uint256 inspectionId = globalInspectionCounter++;
-        
+
         Inspection memory newInspection = Inspection({
             agreementId: _agreementId,
             inspector: msg.sender,
@@ -296,7 +289,15 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
         emit InspectionCompleted(_agreementId, inspectionId, _issuesFound);
     }
 
- 
-    function acknowledgeInspection(uint256 _agreementId, uint256 _inspectionIndex) external nonReentrant whenNotPaused agreementExists(_agreementId) onlyTenant(_agreementId) {
+    function acknowledgeInspection(uint256 _agreementId, uint256 _inspectionIndex) 
+        external 
+        nonReentrant 
+        whenNotPaused 
+        agreementExists(_agreementId) 
+        onlyTenant(_agreementId) 
+    {
         require(_inspectionIndex < agreementInspections[_agreementId].length, "Invalid inspection index");
-        agreementInspections[_ag
+
+        agreementInspections[_agreementId][_inspectionIndex].tenantAcknowledged = true;
+    }
+}
