@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
+// Import OpenZeppelin contracts for security and access control
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 
+// Main contract for managing rental agreements
 contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
+    // Struct representing a rental agreement
     struct Agreement {
         address landlord;
         address tenant;
@@ -31,6 +34,7 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
         uint256 gracePeriodDays;
     }
 
+    // Struct for maintenance requests
     struct MaintenanceRequest {
         uint256 agreementId;
         address requester;
@@ -45,6 +49,7 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
         address assignedContractor;
     }
 
+    // Struct for reviews by users
     struct Review {
         address reviewer;
         address reviewee;
@@ -54,6 +59,7 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
         bool isLandlordReview;
     }
 
+    // Struct for property inspections
     struct Inspection {
         uint256 agreementId;
         address inspector;
@@ -65,6 +71,7 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
         uint256[] estimatedRepairCosts;
     }
 
+    // Struct for rent payment plans
     struct PaymentPlan {
         uint256 agreementId;
         uint256 totalAmount;
@@ -76,6 +83,7 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
         string reason;
     }
 
+    // Struct for proposing a rent increase
     struct RentIncrease {
         uint256 agreementId;
         uint256 newRent;
@@ -86,6 +94,7 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
         uint256 currentRent;
     }
 
+    // Struct for documents (e.g., lease agreements, reports)
     struct Document {
         string documentHash;
         string documentType;
@@ -94,6 +103,7 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
         bool isPublic;
     }
 
+    // Struct for emergency contacts
     struct EmergencyContact {
         string name;
         string phoneNumber;
@@ -101,6 +111,7 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
         address walletAddress;
     }
 
+    // Mappings for storing data related to agreements, reviews, maintenance, etc.
     mapping(uint256 => Agreement) public agreements;
     mapping(address => uint256[]) public landlordAgreements;
     mapping(address => uint256[]) public tenantAgreements;
@@ -127,12 +138,14 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
     mapping(uint256 => uint256) public agreementUtilityUsage;
     mapping(address => string) public userKYCHash;
 
+    // Global counters
     uint256 public agreementCounter;
     uint256 public maintenanceRequestCounter;
     uint256 public globalInspectionCounter;
     uint256 public globalPaymentPlanCounter;
     uint256 public globalRentIncreaseCounter;
 
+    // Constants for fees and rules
     uint256 public constant LATE_FEE_PERCENTAGE = 5;
     uint256 public constant SECONDS_IN_MONTH = 30 days;
     uint256 public constant MAINTENANCE_RESERVE_PERCENTAGE = 2;
@@ -144,6 +157,7 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
 
     uint256 public totalPlatformFees;
 
+    // Events emitted for various actions
     event InspectionScheduled(uint256 indexed agreementId, uint256 indexed inspectionId, string inspectionType, uint256 scheduledDate);
     event InspectionCompleted(uint256 indexed agreementId, uint256 indexed inspectionId, string[] issues);
     event PaymentPlanCreated(uint256 indexed agreementId, uint256 indexed planId, uint256 totalAmount, uint256 installments);
@@ -170,6 +184,7 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
     event AgreementRenewed(uint256 indexed agreementId, uint256 newEndDate, uint256 newRent);
     event UserVerified(address indexed user, uint256 securityScore);
 
+    // Modifiers to restrict access
     modifier onlyLandlord(uint256 _agreementId) {
         require(agreements[_agreementId].landlord == msg.sender, "Only landlord can perform this action");
         _;
@@ -199,8 +214,10 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
         _;
     }
 
+    // Constructor sets the contract deployer as the owner
     constructor() Ownable(msg.sender) {}
 
+    /// @notice Creates a new rental agreement with extended features
     function createAgreementEnhanced(
         address _tenant,
         uint256 _monthlyRent,
@@ -228,6 +245,7 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
         uint256 agreementId = agreementCounter++;
         uint256 maintenanceReserve = (_monthlyRent * MAINTENANCE_RESERVE_PERCENTAGE) / 100;
 
+        // Create and initialize the agreement
         Agreement storage agreement = agreements[agreementId];
         agreement.landlord = msg.sender;
         agreement.tenant = _tenant;
@@ -252,12 +270,14 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
         agreement.amenities = _amenities;
         agreement.gracePeriodDays = _gracePeriodDays;
 
+        // Track agreement IDs for landlord and tenant
         landlordAgreements[msg.sender].push(agreementId);
         tenantAgreements[_tenant].push(agreementId);
 
         emit AgreementCreated(agreementId, msg.sender, _tenant, _monthlyRent, _securityDeposit, _propertyAddress);
     }
 
+    /// @notice Schedule a property inspection by the landlord
     function scheduleInspection(
         uint256 _agreementId,
         string memory _inspectionType,
@@ -271,6 +291,7 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
 
         uint256 inspectionId = globalInspectionCounter++;
 
+        // Create a new inspection record
         Inspection memory newInspection = Inspection({
             agreementId: _agreementId,
             inspector: msg.sender,
@@ -289,6 +310,7 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
         emit InspectionCompleted(_agreementId, inspectionId, _issuesFound);
     }
 
+    /// @notice Tenant acknowledges the completion of an inspection
     function acknowledgeInspection(uint256 _agreementId, uint256 _inspectionIndex) 
         external 
         nonReentrant 
@@ -298,6 +320,7 @@ contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
     {
         require(_inspectionIndex < agreementInspections[_agreementId].length, "Invalid inspection index");
 
+        // Mark tenant acknowledgment
         agreementInspections[_agreementId][_inspectionIndex].tenantAcknowledged = true;
     }
 }
