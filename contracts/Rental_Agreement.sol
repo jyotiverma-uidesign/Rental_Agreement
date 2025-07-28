@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 
-// Main contract for managing rental agreements
+
 contract RentalAgreement is ReentrancyGuard, Ownable, Pausable {
     // Struct representing a rental agreement
     struct Agreement {
