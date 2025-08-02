@@ -44,6 +44,14 @@ contract RentalAgreement is ReentrancyGuard, Pausable {
         bool resolved;
     }
 
+    struct Dispute {
+        uint256 agreementId;
+        address raisedBy;
+        string reason;
+        bool resolved;
+        string resolutionNote;
+    }
+
     mapping(uint256 => Agreement) public agreements;
     mapping(address => uint256) public userEscrowBalance;
     mapping(address => string) public userKYCHash;
@@ -55,6 +63,7 @@ contract RentalAgreement is ReentrancyGuard, Pausable {
 
     EmergencyMaintenance[] public emergencyRequests;
     MaintenanceRequest[] public maintenanceRequests;
+    Dispute[] public disputes;
 
     uint256 public totalPlatformFees;
 
@@ -96,9 +105,8 @@ contract RentalAgreement is ReentrancyGuard, Pausable {
     event EmergencyPaused();
     event EmergencyResumed();
     event SecurityDepositAdded(uint256 agreementId, address landlord, uint256 amount);
-
-    // --- Existing functions remain unchanged ---
-    // ...
+    event DisputeRaised(uint256 disputeId, uint256 agreementId, address by, string reason);
+    event DisputeResolved(uint256 disputeId, string resolutionNote);
 
     function acceptRentChange(uint256 _agreementId) external nonReentrant whenNotPaused agreementExists(_agreementId) onlyTenant(_agreementId) {
         uint256 newRent = pendingRentChanges[_agreementId];
@@ -177,5 +185,26 @@ contract RentalAgreement is ReentrancyGuard, Pausable {
             }
         }
         return result;
+    }
+
+    // --- New Functionality: Dispute Resolution ---
+    function raiseDispute(uint256 _agreementId, string memory _reason) external agreementExists(_agreementId) onlyAgreementParties(_agreementId) {
+        disputes.push(Dispute({
+            agreementId: _agreementId,
+            raisedBy: msg.sender,
+            reason: _reason,
+            resolved: false,
+            resolutionNote: ""
+        }));
+        emit DisputeRaised(disputes.length - 1, _agreementId, msg.sender, _reason);
+    }
+
+    function resolveDispute(uint256 _disputeId, string memory _resolutionNote) external onlyAdmin {
+        require(_disputeId < disputes.length, "Invalid dispute ID");
+        Dispute storage d = disputes[_disputeId];
+        require(!d.resolved, "Already resolved");
+        d.resolved = true;
+        d.resolutionNote = _resolutionNote;
+        emit DisputeResolved(_disputeId, _resolutionNote);
     }
 }
