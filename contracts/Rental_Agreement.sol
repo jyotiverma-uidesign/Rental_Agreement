@@ -207,4 +207,26 @@ contract RentalAgreement is ReentrancyGuard, Pausable {
         d.resolutionNote = _resolutionNote;
         emit DisputeResolved(_disputeId, _resolutionNote);
     }
+
+    // --- New Functionality: Tenant Contractor Rating ---
+    function rateContractor(address _contractor, uint8 _rating) external {
+        require(_rating >= 1 && _rating <= 5, "Rating must be between 1 and 5");
+
+        bool isParty = false;
+        for (uint256 i = 0; i < maintenanceRequests.length; i++) {
+            if (
+                maintenanceRequests[i].assignedContractor == _contractor &&
+                agreements[maintenanceRequests[i].agreementId].tenant == msg.sender
+            ) {
+                isParty = true;
+                break;
+            }
+        }
+
+        require(isParty, "You can't rate this contractor");
+
+        contractorRatings[_contractor].push(_rating);
+        emit ContractorRated(_contractor, _rating);
+    }
 }
+
