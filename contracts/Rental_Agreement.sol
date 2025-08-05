@@ -187,7 +187,7 @@ contract RentalAgreement is ReentrancyGuard, Pausable {
         return result;
     }
 
-    // --- New Functionality: Dispute Resolution ---
+
     function raiseDispute(uint256 _agreementId, string memory _reason) external agreementExists(_agreementId) onlyAgreementParties(_agreementId) {
         disputes.push(Dispute({
             agreementId: _agreementId,
@@ -229,4 +229,5 @@ contract RentalAgreement is ReentrancyGuard, Pausable {
         emit ContractorRated(_contractor, _rating);
     }
 }
+
 
