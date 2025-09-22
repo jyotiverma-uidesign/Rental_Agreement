@@ -29,12 +29,15 @@ contract RentalAgreement is ReentrancyGuard, Pausable {
         bool isActive;
         bool autoRenewal;
         uint256 lateFeesOwed;
+        uint256 securityDeposit;
     }
 
     struct MaintenanceRequest {
         uint256 agreementId;
         bool isApproved;
         address assignedContractor;
+        uint256 estimatedCost;
+        bool landlordFunded;
     }
 
     struct EmergencyMaintenance {
@@ -53,6 +56,12 @@ contract RentalAgreement is ReentrancyGuard, Pausable {
         string resolutionNote;
     }
 
+    struct PaymentRecord {
+        uint256 agreementId;
+        uint256 amount;
+        uint256 timestamp;
+    }
+
     mapping(uint256 => Agreement) public agreements;
     mapping(address => uint256) public userEscrowBalance;
     mapping(address => string) public userKYCHash;
@@ -61,6 +70,8 @@ contract RentalAgreement is ReentrancyGuard, Pausable {
     mapping(address => bool) public verifiedContractors;
     mapping(uint256 => uint256) public pendingRentChanges;
     mapping(uint256 => bool) public agreementLocked;
+    mapping(address => bool) public blacklistedUsers;
+    mapping(address => PaymentRecord[]) public userPayments;
 
     EmergencyMaintenance[] public emergencyRequests;
     MaintenanceRequest[] public maintenanceRequests;
@@ -87,6 +98,12 @@ contract RentalAgreement is ReentrancyGuard, Pausable {
         _;
     }
 
+    modifier notBlacklisted() {
+        require(!blacklistedUsers[msg.sender], "User blacklisted");
+        _;
+    }
+
+    // ------------------- Events -------------------
     event AgreementTerminated(uint256 agreementId, address by, uint256 time);
     event AutoPaymentSetup(uint256 agreementId, address by, bool status);
     event UserVerified(address user, uint256 score);
@@ -106,11 +123,15 @@ contract RentalAgreement is ReentrancyGuard, Pausable {
     event SecurityDepositAdded(uint256 agreementId, address landlord, uint256 amount);
     event DisputeRaised(uint256 disputeId, uint256 agreementId, address by, string reason);
     event DisputeResolved(uint256 disputeId, string resolutionNote);
+    event SecurityDepositRefunded(uint256 agreementId, address tenant, uint256 amount);
+    event UserBlacklisted(address user, bool status);
+    event PlatformFeesWithdrawn(address admin, uint256 amount);
+    event PartialRentPaid(uint256 agreementId, address tenant, uint256 amount);
 
     // ------------------- Core Functions -------------------
 
-    function acceptRentChange(uint256 _agreementId) 
-        external nonReentrant whenNotPaused agreementExists(_agreementId) onlyTenant(_agreementId) 
+    function acceptRentChange(uint256 _agreementId)
+        external nonReentrant whenNotPaused agreementExists(_agreementId) onlyTenant(_agreementId)
     {
         uint256 newRent = pendingRentChanges[_agreementId];
         require(newRent > 0, "No proposed rent change");
@@ -134,7 +155,7 @@ contract RentalAgreement is ReentrancyGuard, Pausable {
         require(msg.sender == a.landlord, "Only landlord");
         require(msg.value > 0, "No deposit amount");
 
-        userEscrowBalance[a.tenant] += msg.value;
+        a.securityDeposit += msg.value;
         emit SecurityDepositAdded(_agreementId, msg.sender, msg.value);
     }
 
@@ -148,87 +169,73 @@ contract RentalAgreement is ReentrancyGuard, Pausable {
     function emergencyPause() external onlyAdmin { _pause(); emit EmergencyPaused(); }
     function resume() external onlyAdmin { _unpause(); emit EmergencyResumed(); }
 
-    function raiseDispute(uint256 _agreementId, string memory _reason) 
-        external agreementExists(_agreementId) onlyAgreementParties(_agreementId) 
+    // ------------------- New Functionalities -------------------
+
+    function terminateAgreementEarly(uint256 _agreementId)
+        external nonReentrant whenNotPaused onlyTenant(_agreementId)
     {
-        disputes.push(Dispute(_agreementId, msg.sender, _reason, false, ""));
-        emit DisputeRaised(disputes.length - 1, _agreementId, msg.sender, _reason);
-    }
-
-    function resolveDispute(uint256 _disputeId, string memory _resolutionNote) external onlyAdmin {
-        Dispute storage d = disputes[_disputeId];
-        require(!d.resolved, "Already resolved");
-        d.resolved = true;
-        d.resolutionNote = _resolutionNote;
-        emit DisputeResolved(_disputeId, _resolutionNote);
-    }
-
-    function rateContractor(address _contractor, uint8 _rating) external {
-        require(_rating >= 1 && _rating <= 5, "Rating 1-5 required");
-        require(_hasTenantWorkedWithContractor(msg.sender, _contractor), "Not authorized");
-        contractorRatings[_contractor].push(_rating);
-        emit ContractorRated(_contractor, _rating);
-    }
-
-    // ------------------- New Features -------------------
-
-    function toggleAutoRenewal(uint256 _agreementId) external onlyTenant(_agreementId) {
         Agreement storage a = agreements[_agreementId];
-        a.autoRenewal = !a.autoRenewal;
-        emit AutoPaymentSetup(_agreementId, msg.sender, a.autoRenewal);
+        require(a.isActive, "Agreement not active");
+
+        uint256 fee = a.earlyTerminationFee;
+        require(userEscrowBalance[msg.sender] >= fee, "Insufficient escrow");
+
+        userEscrowBalance[msg.sender] -= fee;
+        totalPlatformFees += fee;
+
+        a.isActive = false;
+        emit AgreementTerminated(_agreementId, msg.sender, block.timestamp);
     }
 
-    function lockAgreement(uint256 _agreementId, bool _lock) external onlyAdmin {
-        agreementLocked[_agreementId] = _lock;
-        emit AgreementLocked(_agreementId, _lock);
+    function payPartialRent(uint256 _agreementId) external payable whenNotPaused onlyTenant(_agreementId) {
+        require(msg.value > 0, "No payment");
+        Agreement storage a = agreements[_agreementId];
+        require(a.isActive, "Agreement not active");
+
+        a.totalRentPaid += msg.value;
+        userPayments[msg.sender].push(PaymentRecord(_agreementId, msg.value, block.timestamp));
+        emit PartialRentPaid(_agreementId, msg.sender, msg.value);
     }
 
-    function getDisputesByAgreement(uint256 _agreementId) external view returns (Dispute[] memory) {
-        uint256 count;
-        for (uint i = 0; i < disputes.length; i++) if (disputes[i].agreementId == _agreementId) count++;
-        Dispute[] memory result = new Dispute[](count);
-        uint256 idx;
-        for (uint i = 0; i < disputes.length; i++) if (disputes[i].agreementId == _agreementId) result[idx++] = disputes[i];
-        return result;
+    function fundMaintenance(uint256 _requestId) external payable {
+        MaintenanceRequest storage req = maintenanceRequests[_requestId];
+        require(msg.sender == agreements[req.agreementId].landlord, "Only landlord can fund");
+        require(!req.landlordFunded, "Already funded");
+        require(msg.value >= req.estimatedCost, "Insufficient funds");
+
+        req.landlordFunded = true;
     }
 
-    function getActiveAgreementsByUser(address _user) external view returns (Agreement[] memory) {
-        uint256 count;
-        for (uint i = 0; i < 100; i++) 
-            if ((agreements[i].tenant == _user || agreements[i].landlord == _user) && agreements[i].isActive) count++;
+    function refundSecurityDeposit(uint256 _agreementId) external onlyAdmin {
+        Agreement storage a = agreements[_agreementId];
+        require(!a.isActive, "Agreement still active");
+        require(a.securityDeposit > 0, "No deposit");
 
-        Agreement[] memory result = new Agreement[](count);
-        uint256 idx;
-        for (uint i = 0; i < 100; i++)
-            if ((agreements[i].tenant == _user || agreements[i].landlord == _user) && agreements[i].isActive)
-                result[idx++] = agreements[i];
-        return result;
+        uint256 refund = a.securityDeposit;
+        a.securityDeposit = 0;
+        payable(a.tenant).transfer(refund);
+        emit SecurityDepositRefunded(_agreementId, a.tenant, refund);
     }
 
-    function getUserEscrow(address _user) external view returns (uint256) {
-        return userEscrowBalance[_user];
+    function blacklistUser(address _user, bool _status) external onlyAdmin {
+        blacklistedUsers[_user] = _status;
+        emit UserBlacklisted(_user, _status);
     }
 
-    function getContractorAverageRating(address _contractor) external view returns (uint256) {
-        uint8[] memory ratings = contractorRatings[_contractor];
-        require(ratings.length > 0, "No ratings");
-        uint256 total;
-        for (uint i = 0; i < ratings.length; i++) total += ratings[i];
-        return total / ratings.length;
+    function withdrawPlatformFees() external onlyAdmin {
+        uint256 amount = totalPlatformFees;
+        totalPlatformFees = 0;
+        payable(admin).transfer(amount);
+        emit PlatformFeesWithdrawn(admin, amount);
     }
 
-    function getEmergencyRequestsByAgreement(uint256 _agreementId) external view returns (EmergencyMaintenance[] memory) {
-        uint256 count;
-        for (uint i = 0; i < emergencyRequests.length; i++) if (emergencyRequests[i].agreementId == _agreementId) count++;
-        EmergencyMaintenance[] memory result = new EmergencyMaintenance[](count);
-        uint256 idx;
-        for (uint i = 0; i < emergencyRequests.length; i++) if (emergencyRequests[i].agreementId == _agreementId) result[idx++] = emergencyRequests[i];
-        return result;
+    function getUserPaymentHistory(address _user) external view returns (PaymentRecord[] memory) {
+        return userPayments[_user];
     }
 
     // ------------------- Internal Helpers -------------------
     function _hasActiveAgreement(address _user) internal view returns (bool) {
-        for (uint i = 0; i < 100; i++) 
+        for (uint i = 0; i < 100; i++)
             if (agreements[i].tenant == _user && agreements[i].isActive) return true;
         return false;
     }
