@@ -242,7 +242,7 @@ contract RentalAgreement is ReentrancyGuard, Pausable {
         return userPayments[_user];
     }
 
-    // ✅ New Feature: Agreement Renewal Request & Approval
+    // ✅ Agreement Renewal Request & Approval
     function requestAgreementRenewal(uint256 _agreementId, uint256 _extendMonths)
         external whenNotPaused onlyTenant(_agreementId)
     {
@@ -271,6 +271,31 @@ contract RentalAgreement is ReentrancyGuard, Pausable {
         Agreement memory a = agreements[_agreementId];
         require(a.isActive, "Agreement not active");
         emit AgreementRenewalRejected(_agreementId, msg.sender);
+    }
+
+    // ✅ NEW FUNCTIONALITY: Dispute Resolution System
+    function raiseDispute(uint256 _agreementId, string calldata _reason)
+        external whenNotPaused onlyAgreementParties(_agreementId)
+    {
+        disputes.push(Dispute({
+            agreementId: _agreementId,
+            raisedBy: msg.sender,
+            reason: _reason,
+            resolved: false,
+            resolutionNote: ""
+        }));
+        emit DisputeRaised(disputes.length - 1, _agreementId, msg.sender, _reason);
+    }
+
+    function resolveDispute(uint256 _disputeId, string calldata _resolutionNote)
+        external onlyAdmin
+    {
+        Dispute storage d = disputes[_disputeId];
+        require(!d.resolved, "Dispute already resolved");
+
+        d.resolved = true;
+        d.resolutionNote = _resolutionNote;
+        emit DisputeResolved(_disputeId, _resolutionNote);
     }
 
     // ------------------- Internal Helpers -------------------
