@@ -62,6 +62,14 @@ contract RentalAgreement is ReentrancyGuard, Pausable {
         uint256 timestamp;
     }
 
+    struct LandlordReview {
+        uint256 agreementId;
+        address tenant;
+        string reviewText;
+        uint8 rating; // 1–5
+        uint256 timestamp;
+    }
+
     mapping(uint256 => Agreement) public agreements;
     mapping(address => uint256) public userEscrowBalance;
     mapping(address => string) public userKYCHash;
@@ -72,6 +80,7 @@ contract RentalAgreement is ReentrancyGuard, Pausable {
     mapping(uint256 => bool) public agreementLocked;
     mapping(address => bool) public blacklistedUsers;
     mapping(address => PaymentRecord[]) public userPayments;
+    mapping(address => LandlordReview[]) public landlordReviews;
 
     EmergencyMaintenance[] public emergencyRequests;
     MaintenanceRequest[] public maintenanceRequests;
@@ -129,6 +138,7 @@ contract RentalAgreement is ReentrancyGuard, Pausable {
     event UserBlacklisted(address user, bool status);
     event PlatformFeesWithdrawn(address admin, uint256 amount);
     event PartialRentPaid(uint256 agreementId, address tenant, uint256 amount);
+    event LandlordReviewed(address indexed landlord, address indexed tenant, uint8 rating, string review);
 
     // ------------------- Core Functions -------------------
 
@@ -273,7 +283,7 @@ contract RentalAgreement is ReentrancyGuard, Pausable {
         emit AgreementRenewalRejected(_agreementId, msg.sender);
     }
 
-    // ✅ NEW FUNCTIONALITY: Dispute Resolution System
+    // ✅ Dispute Resolution System
     function raiseDispute(uint256 _agreementId, string calldata _reason)
         external whenNotPaused onlyAgreementParties(_agreementId)
     {
@@ -298,6 +308,29 @@ contract RentalAgreement is ReentrancyGuard, Pausable {
         emit DisputeResolved(_disputeId, _resolutionNote);
     }
 
+    // ✅ Tenant Review System for Landlords
+    function leaveLandlordReview(uint256 _agreementId, string calldata _reviewText, uint8 _rating)
+        external whenNotPaused onlyTenant(_agreementId)
+    {
+        Agreement memory a = agreements[_agreementId];
+        require(!a.isActive, "Agreement still active");
+        require(_rating >= 1 && _rating <= 5, "Invalid rating");
+
+        landlordReviews[a.landlord].push(LandlordReview({
+            agreementId: _agreementId,
+            tenant: msg.sender,
+            reviewText: _reviewText,
+            rating: _rating,
+            timestamp: block.timestamp
+        }));
+
+        emit LandlordReviewed(a.landlord, msg.sender, _rating, _reviewText);
+    }
+
+    function getLandlordReviews(address _landlord) external view returns (LandlordReview[] memory) {
+        return landlordReviews[_landlord];
+    }
+
     // ------------------- Internal Helpers -------------------
     function _hasActiveAgreement(address _user) internal view returns (bool) {
         for (uint i = 0; i < 100; i++)
@@ -311,4 +344,5 @@ contract RentalAgreement is ReentrancyGuard, Pausable {
                 agreements[maintenanceRequests[i].agreementId].tenant == _tenant) return true;
         return false;
     }
-}  add one more new functionality in ths code
+}
+
