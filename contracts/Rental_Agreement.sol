@@ -70,6 +70,13 @@ contract RentalAgreement is ReentrancyGuard, Pausable {
         uint256 timestamp;
     }
 
+    struct RentReminder {
+        uint256 agreementId;
+        address tenant;
+        uint256 remindBeforeDays;
+        bool active;
+    }
+
     mapping(uint256 => Agreement) public agreements;
     mapping(address => uint256) public userEscrowBalance;
     mapping(address => string) public userKYCHash;
@@ -81,6 +88,7 @@ contract RentalAgreement is ReentrancyGuard, Pausable {
     mapping(address => bool) public blacklistedUsers;
     mapping(address => PaymentRecord[]) public userPayments;
     mapping(address => LandlordReview[]) public landlordReviews;
+    mapping(uint256 => RentReminder) public rentReminders;
 
     EmergencyMaintenance[] public emergencyRequests;
     MaintenanceRequest[] public maintenanceRequests;
@@ -139,6 +147,8 @@ contract RentalAgreement is ReentrancyGuard, Pausable {
     event PlatformFeesWithdrawn(address admin, uint256 amount);
     event PartialRentPaid(uint256 agreementId, address tenant, uint256 amount);
     event LandlordReviewed(address indexed landlord, address indexed tenant, uint8 rating, string review);
+    event RentReminderSet(uint256 indexed agreementId, address tenant, uint256 remindBeforeDays);
+    event RentReminderTriggered(uint256 indexed agreementId, address tenant, uint256 dueDate);
 
     // ------------------- Core Functions -------------------
 
@@ -329,6 +339,39 @@ contract RentalAgreement is ReentrancyGuard, Pausable {
 
     function getLandlordReviews(address _landlord) external view returns (LandlordReview[] memory) {
         return landlordReviews[_landlord];
+    }
+
+    // ✅ Rent Reminder System
+    function setRentReminder(uint256 _agreementId, uint256 _daysBefore)
+        external whenNotPaused onlyTenant(_agreementId)
+    {
+        require(_daysBefore > 0 && _daysBefore <= 30, "Invalid reminder days");
+        Agreement memory a = agreements[_agreementId];
+        require(a.isActive, "Agreement not active");
+
+        rentReminders[_agreementId] = RentReminder({
+            agreementId: _agreementId,
+            tenant: msg.sender,
+            remindBeforeDays: _daysBefore,
+            active: true
+        });
+
+        emit RentReminderSet(_agreementId, msg.sender, _daysBefore);
+    }
+
+    function triggerRentReminder(uint256 _agreementId)
+        external whenNotPaused onlyAgreementParties(_agreementId)
+    {
+        Agreement memory a = agreements[_agreementId];
+        require(a.isActive, "Agreement not active");
+
+        RentReminder memory r = rentReminders[_agreementId];
+        require(r.active, "No reminder set");
+
+        uint256 dueDate = a.lastRentPayment + SECONDS_IN_MONTH;
+        require(block.timestamp >= dueDate - (r.remindBeforeDays * 1 days), "Too early");
+
+        emit RentReminderTriggered(_agreementId, r.tenant, dueDate);
     }
 
     // ------------------- Internal Helpers -------------------
